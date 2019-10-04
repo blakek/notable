@@ -1,4 +1,202 @@
-### Version 1.4.0
+## Version 1.7.2
+
+##### Bug Fixes
+- Ensuring HTML and Enex files can be imported
+
+## Version 1.7.1
+
+##### Bug Fixes
+- Ensuring exporting to HTML and PDF works even if Monaco has not been initialized yet
+
+## Version 1.7.0
+
+##### New Features
+- Added support for adding image attachments via copy and paste
+- Added support for closing the window with `CtrlOrCmd+Shift+W`
+- Added a dialog asking for confirmation before closing a window
+- Added a shortcut for toggling pinning
+- Added support for writing subscripts
+- Added support for writing superscripts
+- Added support for writing footnotes
+- Added a menu entry for displaying a Markdown cheatsheet
+- Added a menu entry for displaying all the provided shortcuts
+  - Showing OS-specific shortcuts
+- Added a menu entry for displaying all the provided emojis
+- Added support for a custom `<markdown>` HTML tag, everything written inside it will be rendered as Markdown
+- Added support for linking to other notes using the `@note` token without explicitly providing the file extension
+- Added `.mkdn` to the list of supported Markdown extensions
+- Added support for importing HTML notes
+- Added support for importing Boostnote notes
+
+##### Improvements
+- Editor: improved formatting detection
+- Changelog: opening it inside the app
+- Comparison table: updated some cells
+- Tutorial: linking to the online version relevant to the currently installed version
+- Updater: detecting offline status
+- Ensured syntax highlighting when previewing and editing is always exactly the same
+- Ensured all pngs are losslessly compressed
+- Improved supports for manually encoded urls
+- Improved detection of code blocks
+- Changed shortcut for reloading the app to `F5`
+
+##### Bug Fixes
+- AsciiMath: ensured regular anchors are detected
+- AsciiMath: ensured autolinked anchors are detected
+- Editor: ensured pressing “esc” while having multiple cursors doesn’t close the editor
+- Export: ensured Monaco tokens styles are exported
+- Export: ensured mermaid diagrams are exported properly
+- KaTeX: ensured all borders/dividers/lines are clearly visible
+- Markdown: more reliable stripping
+- Preview: rendering tasks more reliably
+- Ensured links pointing to a local file are supported too
+- Improved detection of currently opened windows
+
+## Version 1.6.2
+
+##### New Features
+- Added a shortcut for reloading the window
+
+##### Improvements
+- Improved CommonMark v0.29 compatibility
+
+##### Bug Fixes
+- Metadata: fixed support for Windows-style line breaks
+- Tasks: ensuring the bullet point is not displayed
+
+## Version 1.6.1
+
+##### Bug Fixes
+- Metadata: ensuring empty strings are parsed correctly too
+
+## Version 1.6.0
+
+##### New Features
+- Added support for linking to search queries
+- Added support for the "Diff" language
+- Added a menu entry for toggling the menu bar (Windows) (Linux)
+- Added a menu entry for making the app translucent (macOS) (Windows)
+- Added a shortcut for opening the current data directory
+- Added a shortcut for changing the current data directory
+- Editor: added a shortcut for toggling line numbers
+- Editor: added a shortcut for toggling scrolling beyond the last line
+- Editor: added support for quickly wrapping selections with the following characters: (, ], {, ‘, “, `, _, *, ~
+- Editor: added autocompletion support of the following characters sequences: ~~~, ```
+- Maximizing/unmaximazing the window when double-clicking the toolbars (macOS)
+- Released a custom folder icon (macOS)
+- Using natural sorting
+- Uploader: using custom notifications, ensuring they are always displayed even when “do not disturb” is enabled
+- KaTeX: added support for multi-line block expressions
+
+##### Improvements
+- Major portions of the codebase have been refactored or rewritten
+- Significantly improved performance
+  - Showing the main window ~30% faster on startup
+  - Targeting ES2019 rather than ES2015
+  - Replaced previous state-management library with [Overstated v2](https://github.com/fabiospampinato/overstated)
+  - Replaced previous shortcuts library with [shortcuts](https://github.com/fabiospampinato/shortcuts)
+  - Reloading the window instead of reopening it when changing data directory
+  - Minimized re-renderings when only part of the state changes
+  - Avoiding loading the “Stats” object for each note when modified/created metadata are available
+  - Filesystem watcher: exiting earlier on initial “add” events
+  - Rewritten front-matter library
+  - Markdown: rendering using [markdown-it](https://github.com/markdown-it/markdown-it) rather than [showdown](https://github.com/showdownjs/showdown)
+    - Small (~3KB) notes are now rendered up to 30x faster
+    - Large (~1MB) notes are now rendered up to 150x faster
+  - Markdown plugins: lazy loading expensive syntax plugins
+  - Lazy loading expensive modules and components
+  - Context-menus are registered and opened much faster
+  - Improved performance when adding attachments
+- Significantly reduced bloat
+  - Reduced dependencies from ~530 to ~150
+  - Reduced size of the shipped uncompressed codebase from 59MB to 16MB
+- Significantly improved TypeScript types strictness
+  - Reduced "implicit any"s from ~450 to 28
+- Significantly smaller app bundles
+  - Reduced most bundles size by ~10%
+  - Reduced `snap` bundle size by ~60%
+- Editor: greatly improved syntax highlighting
+- Editor: added margins to the top and left matching those found in preview
+- Preview: ensuring it’s easily scrollable with either arrow keys or the spacebar
+- Improved styling of inline code and code blocks
+- Markdown: removed 25k characters limit
+- MhChem: improved support for older expressions using the “\cf” macro
+- Tutorial: added a note about KaTeX expressions containing a “$”
+- Tutorial: updated link to MhChem docs
+- Comparison table: ensuring the CSS is entirely self-contained
+- Updater: checking for updates every 8h rather than every 24h
+
+##### Bug Fixes
+- Ensuring all emojis supported by GitHub are supported
+- Ensuring all external links are opened outside of the app
+- Ensuring only one window gets opened when opening a mermaid diagram in a separate window
+- Ensuring the app doesn’t quit when initially selecting the data directory (Windows) (Linux)
+- Implemented a partial workaround for an Electron bug that makes part of the window unresponsive (macOS)
+- Editor: auto-selecting a note’s title only if it’s untitled
+- Editor: ensuring the background color of the selection is consistent with the preview
+- Editor: ensuring it’s focused when mounted
+- Editor: saving its state more reliably
+- Editor: ensuring ordered lists starting like “1) ” are syntax-highlighted too
+- Split Editor: ensuring its focus is preserved while switching notes
+- Preview: removed flickering when re-rendering
+- Preview: ensuring scrolling position is preserved under the most common scenarios
+- Quick Open: ensuring notes are always sorted ascending by title, and the pinned status is ignored
+- Quick Open: ensuring notes not currently visible in the middlebar are still selectable
+- KaTeX: ensuring fraction lines are clearly visible
+- KaTeX/AsciiMath: improved support for lines containing more than 2 delimiters
+- KaTeX/AsciiMath: much more reliable rendering
+- Note: ensuring a note’s modified date is updated when necessary
+- Note: saving more reliably
+- Highlighter: fixed an issue regarding aliased languages
+- Fixed middlebar scrolling behavior when updating a note so that its position changes
+- Updater: avoiding checking for updates every time the data directory changes
+- Updater: showing a notification if the current app format is not supported
+- Tutorial: ensuring the “Welcome” note and the “Notebooks/Tutorial” tag are selected when importing the tutorial
+
+## Version 1.5.1
+
+##### Improvements
+- Auto-hiding the menu in the “Select Data Directory” window
+- MacOS: asking the user to move the app to `/Applications`
+
+##### Bug Fixes
+- Ensuring the Linux releases work
+- Updater: fixed link to latest linux release
+- Updater: fixed link to latest windows release
+
+## Version 1.5.0
+
+##### New Features
+- Added a dark theme
+- Editor: added cut/copy/paste support via the context menu
+- Mermaid: added a button for opening diagrams in a separate window
+- Prompting the user if he/she wants a new note to be created after clicking a link to a non-existent note
+- Added context menu actions for copying attachments/tags/notes names
+
+##### Improvements
+- Upgraded to Electron v5
+- Moved import/export menu entries under “File”
+- Markdown: improved stripping of headers, emojis, images, links, wikilinks and todos
+- Updater: prompting the user to update manually if necessary
+- Export: greatly reduced exported HTML size
+- Export: added a favicon to exported HTML notes
+- Export: ensuring codeblocks in exported PDFs don't need to be scrolled
+
+##### Bug Fixes
+- Saving notes more reliably
+- Monaco: fixed blurriness issue
+- Ensuring the highlighter outputs valid HTML
+- Decoding entities from inferred titles
+- Worked around a subtle Cash/React incompatibility
+- Avoiding using ids, as they may conflict with the rendered note
+- Fixed trash context menu
+- Context menus: improved reliability
+- Markdown: disabled characters capping on export
+- Quick Open: ensuring the context menu is provided for notes and attachments
+- Quick Open: ensuring it’s always scrolled all the way to the top when opening it
+- Quick Open: ensuring it always searches all notes
+
+## Version 1.4.0
 
 ##### New Features
 - Switched to the AGPL license
@@ -43,7 +241,7 @@
 - Writing/renaming notes less asynchronously
 - Waiting for any pending API or IO operations before closing the app
 
-### Version 1.3.0
+## Version 1.3.0
 
 ##### New Features
 - Updater: added a menu entry for checking for updates
@@ -96,7 +294,7 @@
 - Updater: ensuring secondary notifications are shown only when manually checking for updates
 - Updater: ensuring the menu gets properly restored after checking
 
-### Version 1.2.0
+## Version 1.2.0
 
 ##### New Features
 - Added a cross-platform “About” window
@@ -148,7 +346,7 @@
 - Markdown: properly encoding generated urls
 - Ensuring the currently active note remains active after editing its tags
 
-### Version 1.1.0
+## Version 1.1.0
 
 ##### New Features
 - Added support for `.txt` files
@@ -188,7 +386,7 @@
 - Ensuring there’s always a separator before the `Notable -> Quit` menu entry
 - Ensuring checkboxes are always displayed
 
-### Version 1.0.1
+## Version 1.0.1
 - Simplified import tag
 - Multi-Editor: improved confirmation messages for adding/removing tags
 - Tagbox: ensuring their never share the same name
@@ -211,5 +409,5 @@
 - Multi-Editor: skipping some work when possible
 - Ensuring the `Tags` special tag is never deleted
 
-### Version 1.0.0
+## Version 1.0.0
 - Initial release.

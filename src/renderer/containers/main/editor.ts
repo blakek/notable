@@ -241,7 +241,57 @@ class Editor extends Container<EditorState, MainCTX> {
 
   }
 
+  /* HELPERS */
+
+  _getSelectedText = (): string => {
+
+    const {monaco} = this.state;
+
+    if ( !monaco ) return '';
+
+    const model = monaco.getModel (),
+          selections = monaco.getSelections ();
+
+    if ( !model || !selections || !selections.length ) return '';
+
+    return selections.map ( selection => model.getValueInRange ( selection ) ).join ( '\n' );
+
+  }
+
+  _replaceSelectedText = ( text: string, onlyFirst: boolean = false ): void => {
+
+    const {monaco} = this.state;
+
+    if ( !monaco ) return;
+
+    const model = monaco.getModel (),
+          selections = monaco.getSelections ();
+
+    if ( !model || !selections || !selections.length ) return;
+
+    for ( let i = 0, l = selections.length; i < l; i++ ) {
+
+      monaco.executeEdits ( '', [{
+        text,
+        range: selections[i],
+        forceMoveMarkers: true
+      }]);
+
+      if ( onlyFirst ) break;
+
+    }
+
+  }
+
   /* API */
+
+  reset = () => {
+
+    return this.setState ({
+      monaco: undefined
+    });
+
+  }
 
   isEditing = (): boolean => {
 
@@ -263,6 +313,8 @@ class Editor extends Container<EditorState, MainCTX> {
       this.editingState.save ();
       this.previewingState.restore ();
 
+      this.ctx.note.autosave ();
+
     }
 
     return this.setState ({ editing });
@@ -283,6 +335,8 @@ class Editor extends Container<EditorState, MainCTX> {
 
     this.editingState.save ();
     this.previewingState.save ();
+
+    if ( !split ) this.ctx.note.autosave ();
 
     return this.setState ({ editing, split });
 
@@ -308,16 +362,43 @@ class Editor extends Container<EditorState, MainCTX> {
 
   }
 
-  getData = (): { content: string, modified?: Date } | undefined => {
+  getData = (): { filePath: string, content: string, modified?: Date } | undefined => {
 
     const {monaco} = this.state;
 
     if ( !monaco || !monaco.getModel () ) return;
 
     return {
+      filePath: monaco.getFilePath (),
       content: monaco.getValue (),
       modified: monaco.getChangeDate ()
     };
+
+  }
+
+  cut = (): void => {
+
+    this.copy ();
+
+    this._replaceSelectedText ( '' );
+
+    this.editingState.focus ();
+
+  }
+
+  copy = (): void => {
+
+    this.ctx.clipboard.set ( this._getSelectedText () );
+
+    this.editingState.focus ();
+
+  }
+
+  paste = (): void => {
+
+    this._replaceSelectedText ( this.ctx.clipboard.get (), true );
+
+    this.editingState.focus ();
 
   }
 

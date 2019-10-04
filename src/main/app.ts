@@ -1,9 +1,9 @@
 
 /* IMPORT */
 
-import {app, ipcMain as ipc, Event, Menu, MenuItemConstructorOptions} from 'electron';
+import {app, ipcMain as ipc, Event, Menu, MenuItemConstructorOptions, shell} from 'electron';
 import {autoUpdater as updater} from 'electron-updater';
-import * as is from 'electron-is';
+import {enforceMacOSAppLocation, is} from 'electron-util';
 import * as fs from 'fs';
 import pkg from '@root/package.json';
 import Config from '@common/config';
@@ -20,7 +20,7 @@ class App {
 
   /* VARIABLES */
 
-  win: Window;
+  win: Window | undefined;
 
   /* CONSTRUCTOR */
 
@@ -96,7 +96,7 @@ class App {
 
   __windowAllClosed = () => {
 
-    if ( is.macOS () ) return this.initMenu ();
+    if ( is.macos ) return this.initMenu ();
 
     this.quit ();
 
@@ -132,7 +132,7 @@ class App {
 
   }
 
-  __beforeQuit = ( event ) => {
+  __beforeQuit = ( event: Event ) => {
 
     if ( !this.win || !this.win.win ) return;
 
@@ -165,6 +165,8 @@ class App {
   }
 
   __ready = () => {
+
+    enforceMacOSAppLocation ();
 
     this.initDebug ();
 
@@ -212,7 +214,11 @@ class App {
 
       updater.on ( 'update-available', () => Notification.show ( 'A new update is available', 'Downloading it right now...' ) );
       updater.on ( 'update-not-available', () => Notification.show ( 'No update is available', 'You\'re already using the latest version' ) );
-      updater.on ( 'error', err => Notification.show ( 'An error occurred', err.message ) );
+      updater.on ( 'error', err => {
+        Notification.show ( 'An error occurred', err.message );
+        Notification.show ( 'Update manually', 'Download the new version manually to update the app' );
+        shell.openExternal ( pkg['download'].url );
+      });
 
     }
 
@@ -242,7 +248,7 @@ class App {
 
   quit () {
 
-    app['isQuitting'] = true;
+    global.isQuitting = true;
 
     this.___beforeQuit_off ();
 

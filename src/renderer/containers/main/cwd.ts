@@ -6,17 +6,17 @@ import Dialog from 'electron-dialog';
 import * as fs from 'fs';
 import * as mkdirp from 'mkdirp';
 import * as os from 'os';
-import {Container, autosuspend, compose} from 'overstated';
+import {Container, autosuspend} from 'overstated';
 import * as path from 'path';
 import * as pify from 'pify';
 import Config from '@common/config';
 import Settings from '@common/settings';
-import Tutorial from '@renderer/containers/main/tutorial';
 import File from '@renderer/utils/file';
+import Markdown from '@renderer/utils/markdown';
 
 /* CWD */
 
-class CWD extends Container<CWDState, CWDCTX> {
+class CWD extends Container<CWDState, IMain> {
 
   /* CONSTRUCTOR */
 
@@ -38,7 +38,7 @@ class CWD extends Container<CWDState, CWDCTX> {
 
   set = async ( folderPath: string ) => {
 
-    if ( Config.cwd === folderPath ) return Dialog.alert ( 'This is already the current data directory' );
+    if ( this.get () === folderPath ) return Dialog.alert ( 'That is already the current data directory' );
 
     try {
 
@@ -61,7 +61,20 @@ class CWD extends Container<CWDState, CWDCTX> {
 
       }
 
-      ipc.send ( 'cwd-changed' );
+      if ( !this.ctx.loading.get () ) { // Already loaded, refreshing
+
+        await this.ctx.note.autosave ();
+        await this.ctx.loading.reset ();
+
+        Markdown.converters.refresh ();
+
+        setTimeout ( this.ctx.reset ); // Ensuring the app gets repainted first
+
+      } else { // Reopening
+
+        ipc.send ( 'cwd-changed' );
+
+      }
 
     } catch ( e ) {
 
@@ -102,7 +115,7 @@ class CWD extends Container<CWDState, CWDCTX> {
 
   dialog = (): string | undefined => {
 
-    const cwd = Config.cwd,
+    const cwd = this.get (),
           defaultPath = cwd ? path.dirname ( cwd ) : os.homedir ();
 
     const folderPaths = remote.dialog.showOpenDialog ({
@@ -122,6 +135,4 @@ class CWD extends Container<CWDState, CWDCTX> {
 
 /* EXPORT */
 
-export default compose ({
-  tutorial: Tutorial
-})( CWD ) as ICWD;
+export default CWD;

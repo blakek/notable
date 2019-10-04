@@ -3,6 +3,7 @@
 
 import * as os from 'os';
 import * as Store from 'electron-store';
+import {darkMode} from 'electron-util';
 
 /* SETTINGS */
 
@@ -16,6 +17,7 @@ const Settings = new Store ({
         minimap: {
           enabled: false
         },
+        lineNumbers: 'off',
         wordWrap: 'bounded'
       }
     },
@@ -23,6 +25,7 @@ const Settings = new Store ({
       by: 'title',
       type: 'ascending'
     },
+    theme: darkMode.isEnabled ? 'dark' : 'light',
     tutorial: false // Did we import the tutorial yet?
   }
 });

@@ -2,18 +2,20 @@
 /* IMPORT */
 
 import * as _ from 'lodash';
+import * as isShallowEqual from 'is-shallow-equal';
 import * as React from 'react';
 import {createElement} from 'react';
 import {FixedSizeList} from 'react-window';
 
 /* TREE */
 
-class Tree extends React.Component<{ children, id: string, className?: string, data: any[], FallbackEmptyComponent?, fallbackEmptyMessage?: string, getHeight?: Function, getItemChildren?: Function, getItemKey?: Function, filterItem?: Function, isFlat?: boolean, isFixed?: boolean, isKeyed?: boolean }, { height: number, items: any[], levels: number[], isLeafs: boolean[] }> {
+class Tree extends React.Component<{ children, data: any[], className?: string, FallbackEmptyComponent?, fallbackEmptyMessage?: string, getHeight?: Function, getItemChildren?: Function, getItemKey?: Function, filterItem?: Function, isFlat?: boolean, isFixed?: boolean, isKeyed?: boolean }, { height: number, items: any[], levels: number[], isLeafs: boolean[] }> {
 
   /* VARIABLES */
 
-  listRef = React.createRef () as any; //TSC
-  innerRef = React.createRef () as any; //TSC
+  listRef = React.createRef<FixedSizeList> ();
+  innerRef = React.createRef<HTMLElement> ();
+  outerRef = React.createRef<HTMLElement> ();
 
   /* STATE */
 
@@ -29,7 +31,7 @@ class Tree extends React.Component<{ children, id: string, className?: string, d
   componentDidMount () {
 
     $.$window.on ( 'resize:height', this.updateHeight );
-    $.$window.on ( 'scroll-to-item', `#${this.props.id}`, this.scrollToItem );
+    $.$window.on ( 'scroll-to-item', this.scrollToItem );
 
     this.update ();
 
@@ -38,7 +40,7 @@ class Tree extends React.Component<{ children, id: string, className?: string, d
   componentWillUnmount () {
 
     $.$window.off ( 'resize:height', this.updateHeight );
-    $.$window.off ( 'scroll-to-item', `#${this.props.id}`, this.scrollToItem );
+    $.$window.off ( 'scroll-to-item', this.scrollToItem );
 
   }
 
@@ -48,34 +50,19 @@ class Tree extends React.Component<{ children, id: string, className?: string, d
 
   }
 
-  componentDidUpdate () {
-
-    if ( this.listRef.current && this.innerRef.current ) {
-
-      const {scrollOffset} = this.listRef.current.state,
-            {scrollTop} = this.innerRef.current;
-
-      if ( scrollOffset !== scrollTop ) {
-
-        this.listRef.current.setState ({ scrollOffset: scrollTop });
-
-      }
-
-    }
-
-  }
-
   shouldComponentUpdate ( propsNext, stateNext ) {
 
-    return this.state.items !== stateNext.items || this.state.height !== stateNext.height;
+    return this.state.height !== stateNext.height || !isShallowEqual ( this.state.items, stateNext.items );
 
   }
 
   /* API */
 
-  scrollToItem = ( event, index ) => {
+  scrollToItem = ( event: Event, index: number ) => {
 
-    if ( !this.listRef.current ) return;
+    if ( !this.listRef.current || !this.outerRef.current ) return;
+
+    if ( !this.outerRef.current.contains ( event.target as Node ) ) return; //TSC
 
     if ( !_.isNumber ( index ) ) {
 
@@ -87,9 +74,16 @@ class Tree extends React.Component<{ children, id: string, className?: string, d
 
     this.listRef.current.scrollToItem ( index, 'auto' );
 
+    if ( index === 0 ) { //FIXME: https://github.com/bvaughn/react-window/issues/136
+      setTimeout ( () => {
+        if ( !this.outerRef.current ) return;
+        this.outerRef.current.scrollTop = 0
+      });
+    }
+
   }
 
-  getHeight = ( items ) => {
+  getHeight = ( items: any[] ) => {
 
     return this.props.getHeight ? this.props.getHeight ( items ) : 0;
 
@@ -105,7 +99,7 @@ class Tree extends React.Component<{ children, id: string, className?: string, d
 
   }
 
-  getItem = ( index ) => {
+  getItem = ( index: number ) => {
 
     return this.state.items[index];
 
@@ -117,7 +111,7 @@ class Tree extends React.Component<{ children, id: string, className?: string, d
 
   }
 
-  getItemLevel = ( index ) => {
+  getItemLevel = ( index: number ) => {
 
     if ( this.props.isFlat ) return 0;
 
@@ -125,7 +119,7 @@ class Tree extends React.Component<{ children, id: string, className?: string, d
 
   }
 
-  getItemIsLeaf = ( index ) => {
+  getItemIsLeaf = ( index: number ) => {
 
     if ( this.props.isFlat ) return true;
 
@@ -133,7 +127,7 @@ class Tree extends React.Component<{ children, id: string, className?: string, d
 
   }
 
-  getItemKey = index => {
+  getItemKey = ( index: number ) => {
 
     const isNumber = _.isNumber ( index );
 
@@ -157,9 +151,9 @@ class Tree extends React.Component<{ children, id: string, className?: string, d
 
   filterItem = this.props.filterItem || _.constant ( true )
 
-  getItems = ( data, level = 0 ) => {
+  getItems = ( data: any[], level: number = 0 ) => {
 
-    if ( this.props.isFlat ) return { items: data.filter ( this.filterItem ), levels: [], isLeafs: [] };
+    if ( this.props.isFlat ) return { items: data.filter ( this.filterItem as any ), levels: [], isLeafs: [] }; //TSC
 
     const items: any[] = [],
           levels: number[] = [],
@@ -221,7 +215,7 @@ class Tree extends React.Component<{ children, id: string, className?: string, d
 
   render () {
 
-    const {children, id, className, isFixed, FallbackEmptyComponent, fallbackEmptyMessage} = this.props;
+    const {children, className, isFixed, FallbackEmptyComponent, fallbackEmptyMessage} = this.props;
 
     const {height, items} = this.state;
 
@@ -230,7 +224,7 @@ class Tree extends React.Component<{ children, id: string, className?: string, d
       if ( !FallbackEmptyComponent && !fallbackEmptyMessage ) return null;
 
       return (
-        <div id={id} className={`tree list ${className || ''}`}>
+        <div className={`tree list ${className || ''}`}>
           {FallbackEmptyComponent ? <FallbackEmptyComponent /> : (
             <div className="label list-item empty">
               <span className="title small">{fallbackEmptyMessage}</span>
@@ -242,7 +236,7 @@ class Tree extends React.Component<{ children, id: string, className?: string, d
     } else if ( isFixed ) {
 
       return (
-        <div id={id} className={`tree list ${className || ''}`}>
+        <div className={`tree list ${className || ''}`}>
           <div className="multiple vertical joined">
             {items.map ( ( item, index ) => (
               createElement ( children, { key: index, item })
@@ -253,10 +247,8 @@ class Tree extends React.Component<{ children, id: string, className?: string, d
 
     } else {
 
-      const outerElementType = React.forwardRef ( ( props, ref ) => <div ref={ref as any} id={id} {...props} /> ); //TSC
-
       return (
-        <FixedSizeList ref={this.listRef} innerRef={this.innerRef} outerElementType={outerElementType} className={`tree list ${className || ''}`} height={height} width="auto" itemSize={32} itemCount={items.length} itemKey={this.getItemKey}>
+        <FixedSizeList ref={this.listRef} innerRef={this.innerRef} outerRef={this.outerRef} className={`tree list ${className || ''}`} height={height} width="auto" itemSize={32} itemCount={items.length} itemKey={this.getItemKey}>
           {({ index, style }) => {
             const item = this.getItem ( index );
             const itemKey = this.getItemKey ( item );

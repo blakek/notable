@@ -32,9 +32,15 @@ const Tags = {
 
   SEPARATOR: '/', // Used for nested tags: `Parent/Child`
 
+  isPrivate ( tag: TagObj | string ): boolean {
+
+    return /^__.*__$/.test ( _.isString ( tag ) ? tag : tag.name );
+
+  },
+
   sort ( tags: (TagObj | string)[] ) {
 
-    return _.sortBy ( tags, tag => ( tag.hasOwnProperty ( 'name' ) ? tag['name'] : tag ).toLowerCase ()  );
+    return _.sortBy ( tags, tag => ( _.isString ( tag ) ? tag : tag.name ).toLowerCase () );
 
   }
 

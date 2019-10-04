@@ -14,6 +14,9 @@ import Utils from './utils';
 
 const {encodeFilePath} = Utils;
 
+delete showdown.helper.emojis['octocat']; // Special emoji, removing it
+delete showdown.helper.emojis['showdown']; // Special emoji, removing it
+
 /* MARKDOWN */
 
 const Markdown = {
@@ -96,20 +99,47 @@ const Markdown = {
 
     strip () {
 
+      const {emojis} = showdown.helper;
+
       return [
         { // Standalone syntax => Removing all of it
           type: 'language',
-          regex: /--+|==+|```+|~~~+|:\w+?:/gm,
+          regex: /--+|==+|```+|~~~+/gm,
           replace: () => ''
+        },
+        { // Emoji => Rendering it
+          type: 'language',
+          regex: /:(\S+?):/gm,
+          replace: ( match, $1 ) => emojis[$1] || ''
         },
         { // Wrap syntax => Removing only the wrapping syntax
           type: 'language',
-          regex: /_.*?_|\*.*?\*|~.*?~|`.*?`|\[.*?\]/gm,
+          regex: /_.*?_|\*.*?\*|~.*?~|`.*?`/gm,
           replace: match => match.slice ( 1, -1 )
+        },
+        { // Images => Removing all of it
+          type: 'language',
+          regex: /!\[[^\]]+?\]\([^)]+?\)/gm,
+          replace: () => ''
+        },
+        { // Links => Removing the url
+          type: 'language',
+          regex: /\[([^\]]+?)\](?:\([^)]+?\)|\[[^)]+?\])/gm,
+          replace: ( match, $1 ) => $1
+        },
+        { // Wikilinks => Preserving the title
+          type: 'language',
+          regex: /\[\[([^|\]]+?)(?:\|([^\]]+?))?\]\]/gm,
+          replace: ( match, $1 ) => $1
+        },
+        { // Ending header syntax => Removing the special part
+          type: 'language',
+          regex: /^(\s*#+\s.*?)(#+\s*?$)/gm,
+          replace: ( match, $1 ) => $1
         },
         { // Start syntax => Removing the special syntax
           type: 'language',
-          regex: /^(\s*)(?:>(?:\s*?>)*|#+|\d+\.|[*+-](?=\s))/gm, //TODO: If multiple of these get chained together this regex will fail
+          regex: /^(\s*)(?:>(?:\s*?>)*|#+\s|\d+\.|[*+-](?=\s)(?:\s*\[[xX ]\]\s*)?|\[[^\]]+?\]:.*)/gm, //TODO: If multiple of these get chained together this regex will fail
           replace: ( match, $1 ) => $1
         },
         { // HTML => Removing all of it
@@ -125,7 +155,7 @@ const Markdown = {
 
       return [{
         type: 'output',
-        regex: /<pre><code\s[^>]*(language-[^>]*)>([^]+?)<\/code><\/pre>/g,
+        regex: /<pre><code(\s[^>]*language-[^>]*)>([^]+?)<\/code><\/pre>/g,
         replace ( match, $1, $2 ) {
           try {
             const language = Highlighter.inferLanguage ( $1 );
@@ -188,7 +218,7 @@ const Markdown = {
 
     katex () {
 
-      let katex;
+      let katex: typeof import ( 'katex' );
 
       const init = _.once ( () => { // Lazy init for performance
         katex = require ( 'katex' );
@@ -249,6 +279,18 @@ const Markdown = {
             $(`#${id}`).remove ();
             return `<p class="text-warning">[mermaid error: ${e.message}]</p>`;
           }
+        }
+      }];
+
+    },
+
+    mermaidOpenExternal () {
+
+      return [{
+        type: 'output',
+        regex: /<div class="mermaid">/g,
+        replace ( match ) {
+          return `${match}<div class="mermaid-open-external" title="Open in Separate Window"><i class="icon small">open_in_new</i></div>`;
         }
       }];
 
@@ -339,7 +381,7 @@ const Markdown = {
 
       return [{
         type: 'language',
-        regex: `\\[([^\\]]*)\\]\\(((?:${Config.attachments.token}|${Config.notes.token}|${Config.tags.token})/[^\\)]*)\\)`,
+        regex: `\\[([^\\]]*)\\]\\(((?:${Config.attachments.token}|${Config.notes.token}|${Config.tags.token}|${Config.search.token})/[^\\)]*)\\)`,
         replace ( match, $1, $2, index, content ) {
           if ( Markdown.extensions.utilities.isInsideCode ( content, index, true ) ) return match;
           return `[${$1}](${encodeFilePath ( $2 )})`;
@@ -442,6 +484,31 @@ const Markdown = {
 
     },
 
+    search () {
+
+      const {token} = Config.search;
+
+      return [
+        { // Link Button
+          type: 'output',
+          regex: `<a(.*?)href="${token}/([^"]+)"(.*?)></a>`,
+          replace ( match, $1, $2, $3 ) {
+            $2 = decodeURI ( $2 );
+            return `<a${$1}href="#" class="search button highlight" data-query="${$2}"${$3}><i class="icon small">magnify</i><span>${$2}</span></a>`;
+          }
+        },
+        { // Link
+          type: 'output',
+          regex: `<a(.*?)href="${token}/([^"]+)"(.*?)>`,
+          replace ( match, $1, $2, $3 ) {
+            $2 = decodeURI ( $2 );
+            return `<a${$1}href="#" class="search" data-query="${$2}"${$3}><i class="icon xsmall">magnify</i>`;
+          }
+        }
+      ];
+
+    },
+
     noProtocolLinks () {
 
       return [{
@@ -480,40 +547,71 @@ const Markdown = {
 
   converters: {
 
-    preview: _.memoize ( () => {
+    preview: {
 
-      const {asciimath2tex, katex, mermaid, highlight, copy, checkbox, targetBlankLinks, resolveRelativeLinks, encodeSpecialLinks, attachment, note, tag, noProtocolLinks, wikilink} = Markdown.extensions;
+      converter: { makeHtml: _.identity }, //UGLY
 
-      const converter = new showdown.Converter ({
-        metadata: true,
-        extensions: [asciimath2tex (), katex (), mermaid (), highlight (), copy (), checkbox (), targetBlankLinks (), resolveRelativeLinks (), encodeSpecialLinks (), attachment (), wikilink (), note (), tag (), noProtocolLinks ()]
-      });
+      get: () => {
 
-      converter.setFlavor ( 'github' );
+        const {asciimath2tex, katex, mermaid, mermaidOpenExternal, highlight, copy, checkbox, targetBlankLinks, resolveRelativeLinks, encodeSpecialLinks, attachment, note, tag, search, noProtocolLinks, wikilink} = Markdown.extensions;
 
-      converter.setOption ( 'disableForced4SpacesIndentedSublists', true );
-      converter.setOption ( 'ghMentions', false );
-      converter.setOption ( 'smartIndentationFix', true );
-      converter.setOption ( 'smoothLivePreview', true );
+        const converter = new showdown.Converter ({
+          metadata: true,
+          extensions: [asciimath2tex (), katex (), mermaid (), mermaidOpenExternal (), highlight (), copy (), checkbox (), targetBlankLinks (), resolveRelativeLinks (), encodeSpecialLinks (), attachment (), wikilink (), note (), tag (), search (), noProtocolLinks ()]
+        });
 
-      return converter;
+        converter.setFlavor ( 'github' );
 
-    }),
+        converter.setOption ( 'disableForced4SpacesIndentedSublists', true );
+        converter.setOption ( 'ghMentions', false );
+        converter.setOption ( 'smartIndentationFix', true );
+        converter.setOption ( 'smoothLivePreview', true );
 
-    strip: _.memoize ( () => {
+        return converter;
 
-      const {strip} = Markdown.extensions;
+      },
 
-      const converter = new showdown.Converter ({
-        metadata: true,
-        extensions: [strip]
-      });
+      refresh: () => {
 
-      converter.setFlavor ( 'github' );
+        Markdown.converters.preview.converter = Markdown.converters.preview.get ();
 
-      return converter;
+      }
 
-    })
+    },
+
+    strip: {
+
+      converter: { makeHtml: _.identity }, //UGLY
+
+      get: () => {
+
+        const {strip} = Markdown.extensions;
+
+        const converter = new showdown.Converter ({
+          metadata: true,
+          extensions: [strip]
+        });
+
+        converter.setFlavor ( 'github' );
+
+        return converter;
+
+      },
+
+      refresh: () => {
+
+        Markdown.converters.strip.converter = Markdown.converters.strip.get ();
+
+      }
+
+    },
+
+    refresh: () => {
+
+      Markdown.converters.preview.refresh ();
+      Markdown.converters.strip.refresh ();
+
+    }
 
   },
 
@@ -523,19 +621,19 @@ const Markdown = {
 
   },
 
-  render: ( str: string ): string => {
+  render: ( str: string, limit?: number ): string => {
 
     if ( !str || !Markdown.is ( str ) ) return `<p>${str}</p>`;
 
-    return Markdown.converters.preview ().makeHtml ( Markdown.limiter ( str ).trim () ); //FIXME: Strings starting with multiple empty lines aren't rendered properly
+    return Markdown.converters.preview.converter.makeHtml ( Markdown.limiter ( str, limit ).trim () );
 
   },
 
-  strip: ( str: string ): string => {
+  strip: ( str: string, limit?: number ): string => {
 
     if ( !str || !Markdown.is ( str ) ) return str;
 
-    return Markdown.converters.strip ().makeHtml ( Markdown.limiter ( str ) ).trim ().replace ( Markdown.wrapperRe, '$1' );
+    return Markdown.converters.strip.converter.makeHtml ( Markdown.limiter ( str, limit ) ).trim ().replace ( Markdown.wrapperRe, '$1' );
 
   },
 
@@ -547,6 +645,8 @@ const Markdown = {
   }
 
 };
+
+Markdown.converters.refresh ();
 
 /* EXPORT */
 

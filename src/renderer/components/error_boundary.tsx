@@ -1,16 +1,14 @@
 
 /* IMPORT */
 
-import {shell} from 'electron';
-import * as is from 'electron-is';
-import githubIssueUrl from 'new-github-issue-url';
+import {is, openNewGitHubIssue} from 'electron-util';
 import * as os from 'os';
 import * as React from 'react';
 import pkg from '@root/package.json';
 
 /* ERROR BOUNDARY */
 
-class ErrorBoundary extends React.Component<any, { error?: Error }> {
+class ErrorBoundary extends React.Component<{}, { error?: Error }> {
 
   /* STATE */
 
@@ -34,13 +32,11 @@ class ErrorBoundary extends React.Component<any, { error?: Error }> {
 
     if ( !error ) return;
 
-    const url = githubIssueUrl ({
+    openNewGitHubIssue ({
       repoUrl: pkg.homepage,
       title: `An error occurred: ${error.message}`,
       body: `- **OS Version**: ${os.platform} ${os.release}\n- **Notable Version**: v${pkg.version}\n\n\`\`\`\n${error.stack}\n\`\`\``
     });
-
-    shell.openExternal ( url );
 
   }
 
@@ -52,16 +48,16 @@ class ErrorBoundary extends React.Component<any, { error?: Error }> {
 
     if ( !error ) return this.props.children;
 
-    const isMacOS = is.macOS ();
+    const isMacOS = is.macos;
 
     return (
-      <div id="error-boundary" className="app-wrapper layout">
+      <div className="error-boundary app-wrapper layout">
         {!isMacOS ? null : (
           <div className="layout-header titlebar">
             <span className="title">An Error Occurred!</span>
           </div>
         )}
-        <div className="layout-content container">
+        <div className="layout-content container sharp">
           {isMacOS ? null : (
             <h1 className="text-center">An Error Occurred!</h1>
           )}

@@ -9,17 +9,19 @@ import * as LanguageMarkdown from 'monaco-editor/esm/vs/basic-languages/markdown
 import * as path from 'path';
 import Settings from '@common/settings';
 import ThemeLight from './monaco_light';
+import ThemeDark from './monaco_dark';
 import Todo from './monaco_todo';
 
 /* MONACO */
 
 const Monaco = {
 
-  editorOptions: <monaco.editor.IEditorOptions> {
+  editorOptions: {
     accessibilitySupport: 'off',
     colorDecorators: false,
     contextmenu: false,
     copyWithSyntaxHighlighting: false,
+    disableLayerHinting: true,
     dragAndDrop: true,
     folding: false,
     fontSize: 16 * .875,
@@ -32,9 +34,9 @@ const Monaco = {
     lightbulb: {
       enabled: false
     },
-    lineDecorationsWidth: 3,
+    lineDecorationsWidth: 19, // It gives a bit of a padding to the left
     lineHeight: 16 * .875 * 1.5,
-    lineNumbers: 'off',
+    lineNumbers: Settings.get ( 'monaco.editorOptions.lineNumbers' ),
     minimap: {
       enabled: Settings.get ( 'monaco.editorOptions.minimap.enabled' )
     },
@@ -56,13 +58,13 @@ const Monaco = {
     wordWrapColumn: 1000000,
     wordWrapMinified: false,
     wrappingIndent: 'same'
-  },
+  } as monaco.editor.IEditorOptions,
 
-  modelOptions: <monaco.editor.ITextModelUpdateOptions> {
+  modelOptions: {
     insertSpaces: true,
     tabSize: 2,
     trimAutoWhitespace: true
-  },
+  } as monaco.editor.ITextModelUpdateOptions,
 
   keybindings: {
 
@@ -96,6 +98,25 @@ const Monaco = {
       }
     },
 
+    'editor.toggleLineNumbers': {
+      options: {
+        kbOpts: {
+          kbExpr: EditorContextKeys.editorTextFocus,
+          primary: monaco.KeyMod.Alt | monaco.KeyCode.KEY_L,
+          weight: 100
+        }
+      },
+      handler ( accessor, editor: MonacoEditor ) {
+
+        Monaco.editorOptions.lineNumbers = ( Monaco.editorOptions.lineNumbers === 'off' ) ? 'on' : 'off';
+
+        Settings.set ( 'monaco.editorOptions.lineNumbers', Monaco.editorOptions.lineNumbers );
+
+        editor.updateOptions ( Monaco.editorOptions );
+
+      }
+    },
+
     'editor.toggleMinimap': {
       options: {
         kbOpts: {
@@ -106,7 +127,7 @@ const Monaco = {
       },
       handler ( accessor, editor: MonacoEditor ) {
 
-        if ( !Monaco.editorOptions.minimap ) Monaco.editorOptions.minimap = {}; //TSC
+        if ( !Monaco.editorOptions.minimap ) Monaco.editorOptions.minimap = {};
 
         Monaco.editorOptions.minimap.enabled = !Monaco.editorOptions.minimap.enabled;
 
@@ -165,7 +186,7 @@ const Monaco = {
       }
     }
 
-  },
+  } as { [command: string]: { options: any, handler: Function } | undefined },
 
   keybindingsPatched: {
 
@@ -223,11 +244,12 @@ const Monaco = {
       cmd._kbOpts.mac.primary = monaco.KeyMod.CtrlCmd | monaco.KeyMod.WinCtrl | monaco.KeyCode.UpArrow;
     }
 
-  },
+  } as { [command: string]: Function | false | undefined },
 
   themes: {
 
-    light: ThemeLight
+    light: ThemeLight,
+    dark: ThemeDark
 
   } as { [name: string]: monaco.editor.IStandaloneThemeData },
 
@@ -253,7 +275,11 @@ const Monaco = {
 
     Object.keys ( Monaco.keybindings ).forEach ( id => {
 
-      const {options, handler} = Monaco.keybindings[id];
+      const keybinding = Monaco.keybindings[id];
+
+      if ( !keybinding ) return;
+
+      const {options, handler} = keybinding;
 
       options.id = id;
       options.label = options.label || options.id;
@@ -264,7 +290,7 @@ const Monaco = {
           super ( options );
         }
 
-        runEditorCommand ( accessor, editor ) {
+        runEditorCommand ( accessor, editor: MonacoEditor ) {
           return handler ( accessor, editor );
         }
 

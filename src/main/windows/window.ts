@@ -3,11 +3,12 @@
 
 import * as _ from 'lodash';
 import * as path from 'path';
-import {BrowserWindow} from 'electron';
-import * as is from 'electron-is';
+import {BrowserWindow, BrowserWindowConstructorOptions} from 'electron';
+import {is} from 'electron-util';
 import * as windowStateKeeper from 'electron-window-state';
 import pkg from '@root/package.json';
 import Environment from '@common/environment';
+import Settings from '@common/settings';
 
 /* WINDOW */
 
@@ -16,14 +17,14 @@ class Window {
   /* VARIABLES */
 
   name: string;
-  win: BrowserWindow;
-  options: object;
-  stateOptions: object;
+  win: BrowserWindow = {} as BrowserWindow; //TSC
+  options: BrowserWindowConstructorOptions;
+  stateOptions: windowStateKeeper.Options;
   _didFocus: boolean = false;
 
   /* CONSTRUCTOR */
 
-  constructor ( name, options = {}, stateOptions = {} ) {
+  constructor ( name: string, options: BrowserWindowConstructorOptions = {}, stateOptions: windowStateKeeper.Options = {} ) {
 
     this.name = name;
     this.options = options;
@@ -55,7 +56,9 @@ class Window {
 
     if ( !Environment.isDevelopment ) return;
 
-    this.win.webContents.openDevTools ();
+    this.win.webContents.openDevTools ({
+      mode: 'undocked'
+    });
 
     this.win.webContents.on ( 'devtools-opened', () => {
 
@@ -148,9 +151,9 @@ class Window {
           dimensions = _.pick ( state, ['x', 'y', 'width', 'height'] );
 
     options = _.merge ( dimensions, {
-      frame: !is.macOS (),
-      backgroundColor: '#F4F4F4',
-      icon: path.join ( __static, 'images', `icon.${is.windows () ? 'ico' : 'png'}` ),
+      frame: !is.macos,
+      backgroundColor: ( Settings.get ( 'theme' ) === 'light' ) ? '#F7F7F7' : '#0F0F0F', //TODO: This won't scale with custom themes
+      icon: path.join ( __static, 'images', `icon.${is.windows ? 'ico' : 'png'}` ),
       show: false,
       title: pkg.productName,
       titleBarStyle: 'hiddenInset',

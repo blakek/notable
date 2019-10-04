@@ -2,8 +2,9 @@
 /* IMPORT */
 
 import * as _ from 'lodash';
-import {app, ipcMain as ipc, BrowserWindow, Menu, MenuItemConstructorOptions, shell} from 'electron';
-import * as is from 'electron-is';
+import {BrowserWindowConstructorOptions, Event, ipcMain as ipc, BrowserWindow, Menu, MenuItemConstructorOptions, shell} from 'electron';
+import {is} from 'electron-util';
+import * as windowStateKeeper from 'electron-window-state';
 import * as fs from 'fs';
 import * as mkdirp from 'mkdirp';
 import * as path from 'path';
@@ -11,6 +12,7 @@ import pkg from '@root/package.json';
 import Environment from '@common/environment';
 import UMenu from '@main/utils/menu';
 import About from './about';
+import Mermaid from './mermaid';
 import Route from './route';
 
 /* MAIN */
@@ -19,12 +21,12 @@ class Main extends Route {
 
   /* VARIABLES */
 
-  _prevStateFlags: StateFlags | false = false;
+  _prevKeys: ContextKeysObj | false = false;
   _prevUpdateCheckTimestamp: number = 0;
 
   /* CONSTRUCTOR */
 
-  constructor ( name = 'main', options = { minWidth: 685, minHeight: 425 }, stateOptions = { defaultWidth: 850, defaultHeight: 525 } ) {
+  constructor ( name = 'main', options: BrowserWindowConstructorOptions = { minWidth: 685, minHeight: 425 }, stateOptions: windowStateKeeper.Options = { defaultWidth: 850, defaultHeight: 525 } ) {
 
     super ( name, options, stateOptions );
 
@@ -34,9 +36,9 @@ class Main extends Route {
 
   initLocalShortcuts () {}
 
-  initMenu ( flags: StateFlags | false = this._prevStateFlags ) {
+  initMenu ( keys: ContextKeysObj | false = this._prevKeys ) {
 
-    this._prevStateFlags = flags; // Storing them because they are needed also when focusing to the window
+    this._prevKeys = keys; // Storing them because they are needed also when focusing to the window
 
     const updaterCanCheck = this._updaterCanCheck ();
 
@@ -57,12 +59,74 @@ class Main extends Route {
             type: 'separator'
           },
           {
+            label: 'Open Data Directory',
+            click: () => this.win.webContents.send ( 'cwd-open-in-app' )
+          },
+          {
+            label: 'Change Data Directory...',
+            click: () => this.win.webContents.send ( 'cwd-change' )
+          },
+          {
+            type: 'separator'
+          },
+          {
+            label: 'Theme',
+            submenu: [
+              {
+                type: 'checkbox',
+                label: 'Light',
+                click: () => this.win.webContents.send ( 'theme-set', 'light' ),
+                checked: !keys || keys.theme === 'light'
+              },
+              {
+                type: 'checkbox',
+                label: 'Dark',
+                click: () => this.win.webContents.send ( 'theme-set', 'dark' ),
+                checked: !!keys && keys.theme === 'dark'
+              }
+            ]
+          },
+          {
+            type: 'separator'
+          },
+          {
+            role: 'services',
+            submenu: [] ,
+            visible: is.macos
+          },
+          {
+            type: 'separator',
+            visible: is.macos
+          },
+          {
+            role: 'hide',
+            visible: is.macos
+          },
+          {
+            role: 'hideothers',
+            visible: is.macos
+          },
+          {
+            role: 'unhide',
+            visible: is.macos
+          },
+          {
+            type: 'separator',
+            visible: is.macos
+          },
+          { role: 'quit' }
+        ]
+      },
+      {
+        label: 'File',
+        submenu: [
+          {
             label: 'Import...',
             click: () => this.win.webContents.send ( 'import' )
           },
           {
             label: 'Export',
-            enabled: flags && ( flags.hasNote || flags.isMultiEditorEditing ),
+            enabled: keys && ( keys.hasNote || keys.isMultiEditorEditing ),
             submenu: [
               {
                 label: 'HTML',
@@ -82,48 +146,6 @@ class Main extends Route {
             type: 'separator'
           },
           {
-            label: 'Open Data Directory',
-            click: () => this.win.webContents.send ( 'cwd-open-in-app' )
-          },
-          {
-            label: 'Change Data Directory...',
-            click: () => this.win.webContents.send ( 'cwd-change' )
-          },
-          {
-            type: 'separator'
-          },
-          {
-            role: 'services',
-            submenu: [] ,
-            visible: is.macOS ()
-          },
-          {
-            type: 'separator',
-            visible: is.macOS ()
-          },
-          {
-            role: 'hide',
-            visible: is.macOS ()
-          },
-          {
-            role: 'hideothers',
-            visible: is.macOS ()
-          },
-          {
-            role: 'unhide',
-            visible: is.macOS ()
-          },
-          {
-            type: 'separator',
-            visible: is.macOS ()
-          },
-          { role: 'quit' }
-        ]
-      },
-      {
-        label: 'File',
-        submenu: [
-          {
             label: 'Open...',
             accelerator: 'CmdOrCtrl+O',
             click: () => this.win.webContents.send ( 'quick-panel-toggle' )
@@ -131,13 +153,13 @@ class Main extends Route {
           {
             label: 'Open in Default App',
             accelerator: 'CmdOrCtrl+Alt+O',
-            enabled: flags && flags.hasNote && !flags.isMultiEditorEditing,
+            enabled: keys && keys.hasNote && !keys.isMultiEditorEditing,
             click: () => this.win.webContents.send ( 'note-open-in-app' )
           },
           {
-            label: `Reveal in ${is.macOS () ? 'Finder' : 'Folder'}`,
+            label: `Reveal in ${is.macos ? 'Finder' : 'Folder'}`,
             accelerator: 'CmdOrCtrl+Alt+R',
-            enabled: flags && flags.hasNote && !flags.isMultiEditorEditing,
+            enabled: keys && keys.hasNote && !keys.isMultiEditorEditing,
             click: () => this.win.webContents.send ( 'note-reveal' )
           },
           {
@@ -146,55 +168,55 @@ class Main extends Route {
           {
             label: 'New',
             accelerator: 'CmdOrCtrl+N',
-            enabled: flags && !flags.isMultiEditorEditing,
+            enabled: keys && !keys.isMultiEditorEditing,
             click: () => this.win.webContents.send ( 'note-new' )
           },
           {
             label: 'New from Template',
             accelerator: 'CmdOrCtrl+Alt+Shift+N',
-            enabled: flags && flags.hasNote && flags.isNoteTemplate && !flags.isMultiEditorEditing,
-            visible: flags && flags.hasNote && flags.isNoteTemplate,
+            enabled: keys && keys.hasNote && keys.isNoteTemplate && !keys.isMultiEditorEditing,
+            visible: keys && keys.hasNote && keys.isNoteTemplate,
             click: () => this.win.webContents.send ( 'note-duplicate-template' )
           },
           {
             label: 'Duplicate',
             accelerator: 'CmdOrCtrl+Shift+N',
-            enabled: flags && flags.hasNote && !flags.isMultiEditorEditing,
+            enabled: keys && keys.hasNote && !keys.isMultiEditorEditing,
             click: () => this.win.webContents.send ( 'note-duplicate' )
           },
           {
             type: 'separator'
           },
           {
-            label: flags && flags.hasNote && flags.isEditorEditing ? 'Stop Editing' : 'Edit',
+            label: keys && keys.hasNote && keys.isEditorEditing ? 'Stop Editing' : 'Edit',
             accelerator: 'CmdOrCtrl+E',
-            enabled: flags && flags.hasNote && !flags.isEditorSplitView && !flags.isMultiEditorEditing,
+            enabled: keys && keys.hasNote && !keys.isEditorSplitView && !keys.isMultiEditorEditing,
             click: () => this.win.webContents.send ( 'note-edit-toggle' )
           },
           {
-            label: flags && flags.hasNote && flags.isTagsEditing ? 'Stop Editing Tags' : 'Edit Tags',
+            label: keys && keys.hasNote && keys.isTagsEditing ? 'Stop Editing Tags' : 'Edit Tags',
             accelerator: 'CmdOrCtrl+Shift+T',
-            enabled: flags && flags.hasNote && !flags.isMultiEditorEditing,
+            enabled: keys && keys.hasNote && !keys.isMultiEditorEditing,
             click: () => this.win.webContents.send ( 'note-edit-tags-toggle' )
           },
           {
-            label: flags && flags.hasNote && flags.isAttachmentsEditing ? 'Stop Editing Attachments' : 'Edit Attachments',
+            label: keys && keys.hasNote && keys.isAttachmentsEditing ? 'Stop Editing Attachments' : 'Edit Attachments',
             accelerator: 'CmdOrCtrl+Shift+A',
-            enabled: flags && flags.hasNote && !flags.isMultiEditorEditing,
+            enabled: keys && keys.hasNote && !keys.isMultiEditorEditing,
             click: () => this.win.webContents.send ( 'note-edit-attachments-toggle' )
           },
           {
             type: 'separator'
           },
           {
-            label: flags && flags.hasNote && flags.isNoteFavorited ? 'Unfavorite' : 'Favorite',
+            label: keys && keys.hasNote && keys.isNoteFavorited ? 'Unfavorite' : 'Favorite',
             accelerator: 'CmdOrCtrl+D',
-            enabled: flags && flags.hasNote && !flags.isMultiEditorEditing,
+            enabled: keys && keys.hasNote && !keys.isMultiEditorEditing,
             click: () => this.win.webContents.send ( 'note-favorite-toggle' )
           },
           {
-            label: flags && flags.hasNote && flags.isNotePinned ? 'Unpin' : 'Pin',
-            enabled: flags && flags.hasNote && !flags.isMultiEditorEditing,
+            label: keys && keys.hasNote && keys.isNotePinned ? 'Unpin' : 'Pin',
+            enabled: keys && keys.hasNote && !keys.isMultiEditorEditing,
             click: () => this.win.webContents.send ( 'note-pin-toggle' )
           },
           {
@@ -203,29 +225,29 @@ class Main extends Route {
           {
             label: 'Move to Trash',
             accelerator: 'CmdOrCtrl+Backspace',
-            enabled: flags && flags.hasNote && !flags.isNoteDeleted && !flags.isMultiEditorEditing,
-            visible: flags && flags.hasNote && !flags.isNoteDeleted && !flags.isEditorEditing,
+            enabled: keys && keys.hasNote && !keys.isNoteDeleted && !keys.isMultiEditorEditing,
+            visible: keys && keys.hasNote && !keys.isNoteDeleted && !keys.isEditorEditing,
             click: () => this.win.webContents.send ( 'note-move-to-trash' )
           },
           {
             label: 'Move to Trash',
             accelerator: 'CmdOrCtrl+Alt+Backspace',
-            enabled: flags && flags.hasNote && !flags.isNoteDeleted && !flags.isMultiEditorEditing,
-            visible: flags && flags.hasNote && !flags.isNoteDeleted && flags.isEditorEditing,
+            enabled: keys && keys.hasNote && !keys.isNoteDeleted && !keys.isMultiEditorEditing,
+            visible: keys && keys.hasNote && !keys.isNoteDeleted && keys.isEditorEditing,
             click: () => this.win.webContents.send ( 'note-move-to-trash' )
           },
           {
             label: 'Restore',
             accelerator: 'CmdOrCtrl+Shift+Backspace',
-            enabled: flags && flags.hasNote && flags.isNoteDeleted && !flags.isMultiEditorEditing,
-            visible: flags && flags.hasNote && flags.isNoteDeleted,
+            enabled: keys && keys.hasNote && keys.isNoteDeleted && !keys.isMultiEditorEditing,
+            visible: keys && keys.hasNote && keys.isNoteDeleted,
             click: () => this.win.webContents.send ( 'note-restore' )
           },
           {
             label: 'Permanently Delete',
             accelerator: 'CmdOrCtrl+Alt+Shift+Backspace',
-            enabled: flags && flags.hasNote && !flags.isMultiEditorEditing,
-            visible: flags && flags.hasNote,
+            enabled: keys && keys.hasNote && !keys.isMultiEditorEditing,
+            visible: keys && keys.hasNote,
             click: () => this.win.webContents.send ( 'note-permanently-delete' )
           }
         ]
@@ -269,7 +291,7 @@ class Main extends Route {
           },
           {
             type: 'separator',
-            visible: is.macOS ()
+            visible: is.macos
           },
           {
             label: 'Speech',
@@ -277,7 +299,7 @@ class Main extends Route {
               { role: 'startspeaking' },
               { role: 'stopspeaking' }
             ],
-            visible: is.macOS ()
+            visible: is.macos
           }
         ]
       },
@@ -333,7 +355,7 @@ class Main extends Route {
           { role: 'minimize' },
           {
             role: 'zoom',
-            visible: is.macOS ()
+            visible: is.macos
           },
           {
             type: 'separator'
@@ -378,11 +400,11 @@ class Main extends Route {
           },
           {
             type: 'separator',
-            visible: is.macOS ()
+            visible: is.macos
           },
           {
             role: 'front',
-            visible: is.macOS ()
+            visible: is.macos
           }
         ]
       },
@@ -435,13 +457,14 @@ class Main extends Route {
 
     this.___blur ();
     this.___close ();
+    this.___contextKeysUpdate ();
     this.___focus ();
     this.___forceClose ();
     this.___fullscreenEnter ();
     this.___fullscreenLeave ();
-    this.___flagsUpdate ();
     this.___navigateUrl ();
     this.___printPDF ();
+    this.___mermaidOpen ();
 
   }
 
@@ -449,8 +472,8 @@ class Main extends Route {
 
     super.cleanup ();
 
+    ipc.removeListener ( 'context-keys-update', this.__contextKeysUpdate );
     ipc.removeListener ( 'force-close', this.__forceClose );
-    ipc.removeListener ( 'flags-update', this.__flagsUpdate );
     ipc.removeListener ( 'print-pdf', this.__printPDF );
 
   }
@@ -484,13 +507,27 @@ class Main extends Route {
 
   }
 
-  __close = ( event ) => {
+  __close = ( event: Event ) => {
 
-    if ( app['isQuitting'] ) return;
+    if ( global.isQuitting ) return;
 
     event.preventDefault ();
 
     this.win.webContents.send ( 'window-close' );
+
+  }
+
+  /* CONTEXT KEYS UPDATE */
+
+  ___contextKeysUpdate = () => {
+
+    ipc.on ( 'context-keys-update', this.__contextKeysUpdate );
+
+  }
+
+  __contextKeysUpdate = ( event: Event, keys: ContextKeysObj ) => {
+
+    this.initMenu ( keys );
 
   }
 
@@ -552,20 +589,6 @@ class Main extends Route {
 
   }
 
-  /* FLAGS UPDATE */
-
-  ___flagsUpdate = () => {
-
-    ipc.on ( 'flags-update', this.__flagsUpdate );
-
-  }
-
-  __flagsUpdate = ( event, flags ) => {
-
-    this.initMenu ( flags );
-
-  }
-
   /* NAVIGATE URL */
 
   ___navigateUrl = () => {
@@ -574,7 +597,7 @@ class Main extends Route {
 
   }
 
-  __navigateUrl = ( event, url ) => {
+  __navigateUrl = ( event: Event, url: string ) => {
 
     if ( url === this.win.webContents.getURL () ) return;
 
@@ -592,7 +615,7 @@ class Main extends Route {
 
   }
 
-  __printPDF = ( event, options ) => {
+  __printPDF = ( event: Event, options: PrintOptions ) => {
 
     const win = new BrowserWindow ({
       show: false,
@@ -603,7 +626,7 @@ class Main extends Route {
 
     if ( options.html ) {
 
-      win.loadURL ( `data:text/html;charset=utf-8,${options.html}` );
+      win.loadURL ( `data:text/html;base64,${Buffer.from ( options.html ).toString ( 'base64' )}` ); //FIXME: https://github.com/electron/electron/issues/18093
 
     } else if ( options.src ) {
 
@@ -625,7 +648,7 @@ class Main extends Route {
         fs.writeFile ( options.dst, data, err => {
           if ( err ) {
             if ( err.code === 'ENOENT' ) {
-              mkdirp ( path.dirname ( options.dst ), err => {
+              mkdirp ( path.dirname ( options.dst ), ( err: Error ) => {
                 if ( err ) return console.error ( err );
                 fs.writeFile ( options.dst, data, err => {
                   if ( err ) return console.error ( err );
@@ -638,6 +661,20 @@ class Main extends Route {
         });
       });
     });
+
+  }
+
+  /* MERMAID OPEN */
+
+  ___mermaidOpen = () => {
+
+    ipc.on ( 'mermaid-open', this.__mermaidOpen );
+
+  }
+
+  __mermaidOpen = ( event: Event, data: string ) => {
+
+    new Mermaid ( undefined, undefined, undefined, data ).init ();
 
   }
 

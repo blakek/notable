@@ -6,6 +6,7 @@ import {shell} from 'electron';
 import Dialog from 'electron-dialog';
 import * as CRC32 from 'crc-32'; // Not a cryptographic hash function, but it's good enough (and fast!) for our purposes
 import * as fs from 'fs';
+import {AllHtmlEntities as entities} from 'html-entities';
 import {Container, autosuspend} from 'overstated';
 import * as path from 'path';
 import Config from '@common/config';
@@ -55,19 +56,19 @@ class Note extends Container<NoteState, MainCTX> {
 
   _inferTitleFromLine ( line: string | null, fallback: string = 'Untitled' ): string {
 
-    return line ? Markdown.strip ( line.trim () ).replace ( /\s{2,}/g, ' ' ) || fallback : fallback;
+    return line ? entities.decode ( Markdown.strip ( line.trim () ).replace ( /\s{2,}/g, ' ' ) ) || fallback : fallback;
 
   }
 
   /* API */
 
-  new = async () => {
+  new = async ( title: string = 'Untitled' ) => {
 
     const {ext, path: notesPath} = Config.notes;
 
     if ( !notesPath ) return;
 
-    const {filePath, fileName} = await Path.getAllowedPath ( notesPath, `Untitled${ext}` ),
+    const {filePath, fileName} = await Path.getAllowedPath ( notesPath, `${title}${ext}` ),
           searchQuery = this.ctx.search.getQuery (),
           searchNotes = this.ctx.search.getNotes (),
           name = searchQuery && !searchNotes.length ? searchQuery : path.parse ( fileName ).name,
@@ -566,27 +567,25 @@ class Note extends Container<NoteState, MainCTX> {
 
   }
 
-  autosave = () => {
-
-    if ( !this.ctx.editor.isEditing () ) return;
-
-    const note = this.get ();
-
-    if ( !note ) return;
+  autosave = ( force: boolean = false ) => {
 
     const data = this.ctx.editor.getData ();
 
     if ( !data ) return;
 
-    return this.save ( note, data.content, data.modified );
-
-  }
-
-  save = async ( note: NoteObj | undefined = this.state.note, plainContent: string, modified: Date = new Date () ) => {
+    const note = this.get ( data.filePath );
 
     if ( !note ) return;
 
-    if ( note.plainContent === plainContent ) return;
+    return this.save ( note, data.content, data.modified, force );
+
+  }
+
+  save = async ( note: NoteObj | undefined = this.state.note, plainContent: string, modified: Date = new Date (), force: boolean = false ) => {
+
+    if ( !note ) return;
+
+    if ( !force && note.plainContent === plainContent ) return;
 
     if ( !this.get ( note.filePath ) ) return; // The note got deleted in the mean time
 
@@ -747,7 +746,7 @@ class Note extends Container<NoteState, MainCTX> {
 
     if ( index === -1 ) return;
 
-    $('#list-notes').trigger ( 'scroll-to-item', index );
+    $('.list-notes').trigger ( 'scroll-to-item', index );
 
   }
 
@@ -767,9 +766,23 @@ class Note extends Container<NoteState, MainCTX> {
 
       await this.ctx.multiEditor.selectClear ();
 
+    } else {
+
+      await this.ctx.multiEditor.update ();
+
     }
 
     this.scrollTo ( note );
+
+  }
+
+  reset = async () => {
+
+    await this.setState ({
+      note: undefined
+    });
+
+    return this.update ();
 
   }
 

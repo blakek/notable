@@ -60,6 +60,15 @@ class MultiEditor extends Container<MultiEditorState, MainCTX> {
 
   /* API */
 
+  reset = () => {
+
+    return this.setState ({
+      notes: [],
+      skippable: false
+    });
+
+  }
+
   toggleNoteRange = ( noteEnd: NoteObj ) => {
 
     const notesSelected = this.getNotes (),
@@ -96,7 +105,7 @@ class MultiEditor extends Container<MultiEditorState, MainCTX> {
     const notes = this.getNotes (),
           index = notes.indexOf ( note );
 
-    let notesNext;
+    let notesNext: NoteObj[] = [];
 
     if ( force !== true && index >= 0 ) { // Remove
 

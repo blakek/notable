@@ -4,13 +4,19 @@
 declare const __static: string;
 declare const Svelto: any;
 
+declare module NodeJS  {
+  interface Global {
+    isQuitting?: boolean
+  }
+}
+
 /* CASH */
 
 type cash = typeof import ( 'cash-dom' ).default;
 type Cash = ReturnType<cash>;
 
 declare const $: cash & {
-  [index: string]: any,
+  isEditable: ( ele: Element | null ) => boolean,
   $document: Cash,
   $window: Cash
 };
@@ -26,9 +32,24 @@ type AttachmentsObj = {
   [fileName: string]: AttachmentObj
 };
 
+type ContextKeysObj = {
+  hasNote: boolean,
+  isAttachmentsEditing: boolean,
+  isEditorEditing: boolean,
+  isEditorSplitView: boolean,
+  isMultiEditorEditing: boolean,
+  isNoteDeleted: boolean,
+  isNoteFavorited: boolean,
+  isNotePinned: boolean,
+  isTagsEditing: boolean,
+  isNoteTemplate: boolean,
+  theme: string
+};
+
 type MonacoEditor = import ( 'monaco-editor/esm/vs/editor/editor.api.js' ).editor.ICodeEditor & {
-  getChangeDate: () => Date | undefined
-}
+  getChangeDate: () => Date | undefined,
+  getFilePath: () => string
+};
 
 type NoteMetadataObj = {
   attachments: string[],
@@ -94,6 +115,12 @@ type AttachmentsState = {
   attachments: AttachmentsObj
   editing: boolean
 };
+
+type ClipboardState = {};
+
+type ContextKeysState = {};
+
+type CWDState = {};
 
 type EditorState = {
   monaco?: MonacoEditor,
@@ -161,6 +188,14 @@ type TagsState = {
   editing: boolean
 };
 
+type ThemeState = {
+  theme: string
+};
+
+type ThemesState = {
+  themes: string[]
+};
+
 type TrashState = {};
 
 type TutorialState = {};
@@ -177,6 +212,8 @@ type WindowState = {
 type MainState = {
   attachment: AttachmentState,
   attachments: AttachmentsState,
+  clipboard: ClipboardState,
+  contextKeys: ContextKeysState,
   editor: EditorState,
   export: ExportState,
   import: ImportState,
@@ -190,23 +227,26 @@ type MainState = {
   sorting: SortingState,
   tag: TagState,
   tags: TagsState,
+  theme: ThemeState,
+  themes: ThemesState,
   trash: TrashState,
   tutorial: TutorialState,
   window: WindowState
 };
 
 type MainCTX = {
-  _prevFlags?: StateFlags,
   state: MainState,
   suspend (),
   unsuspend (),
   suspendMiddlewares (),
   unsuspendMiddlewares (),
-  refresh (),
-  listen (),
+  reset (),
   waitIdle (),
   attachment: import ( '@renderer/containers/main/attachment' ).default,
   attachments: import ( '@renderer/containers/main/attachments' ).default,
+  clipboard: import ( '@renderer/containers/main/clipboard' ).default,
+  contextKeys: import ( '@renderer/containers/main/context_keys' ).default,
+  cwd: import ( '@renderer/containers/main/cwd' ).default,
   editor: import ( '@renderer/containers/main/editor' ).default,
   export: import ( '@renderer/containers/main/export' ).default,
   import: import ( '@renderer/containers/main/import' ).default,
@@ -220,6 +260,8 @@ type MainCTX = {
   sorting: import ( '@renderer/containers/main/sorting' ).default,
   tag: import ( '@renderer/containers/main/tag' ).default,
   tags: import ( '@renderer/containers/main/tags' ).default,
+  theme: import ( '@renderer/containers/main/theme' ).default,
+  themes: import ( '@renderer/containers/main/themes' ).default,
   trash: import ( '@renderer/containers/main/trash' ).default,
   tutorial: import ( '@renderer/containers/main/tutorial' ).default,
   window: import ( '@renderer/containers/main/window' ).default
@@ -227,33 +269,10 @@ type MainCTX = {
 
 type IMain = MainCTX & { ctx: MainCTX };
 
-/* CWD */
-
-type CWDState = {};
-
-type CWDCTX = {
-  get (),
-  set (),
-  select (),
-  selectDefault (),
-  openInApp (),
-  dialog (),
-  tutorial: import ( '@renderer/containers/main/tutorial' ).default
-};
-
-type ICWD = CWDCTX & { ctx: CWDCTX };
-
 /* OTHERS */
 
-type StateFlags = {
-  hasNote: boolean,
-  isAttachmentsEditing: boolean,
-  isEditorEditing: boolean,
-  isEditorSplitView: boolean,
-  isMultiEditorEditing: boolean,
-  isNoteDeleted: boolean,
-  isNoteFavorited: boolean,
-  isNotePinned: boolean,
-  isTagsEditing: boolean,
-  isNoteTemplate: boolean
+type PrintOptions = {
+  html?: string,
+  src?: string,
+  dst: string
 };

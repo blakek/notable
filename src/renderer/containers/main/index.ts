@@ -2,10 +2,12 @@
 /* IMPORT */
 
 import * as _ from 'lodash';
-import {ipcRenderer as ipc} from 'electron';
 import {Container, autosuspend, compose} from 'overstated';
 import Attachment from './attachment';
 import Attachments from './attachments';
+import Clipboard from './clipboard';
+import CWD from './cwd';
+import ContextKeys from './context_keys';
 import Editor from './editor';
 import Export from './export';
 import Import from './import';
@@ -19,11 +21,12 @@ import Skeleton from './skeleton';
 import Sorting from './sorting';
 import Tag from './tag';
 import Tags from './tags';
+import Theme from './theme';
+import Themes from './themes';
 import Trash from './trash';
 import Tutorial from './tutorial';
 import Window from './window';
 import File from '@renderer/utils/file';
-import {TagSpecials} from '@renderer/utils/tags';
 
 /* MAIN */
 
@@ -34,8 +37,6 @@ class Main extends Container<MainState, MainCTX> {
   autosuspend = {
     methods: /^(?!_|middleware|(?:(?:get|is|has)(?![a-z0-9]))|waitIdle)/
   };
-
-  _prevFlags;
 
   /* CONSTRUCTOR */
 
@@ -56,8 +57,7 @@ class Main extends Container<MainState, MainCTX> {
     this.addMiddleware ( this.middlewareCloseQuickPanelPopovers );
     this.addMiddleware ( this.middlewareNoNote );
     this.addMiddleware ( this.middlewareResetEditor );
-    this.addMiddleware ( this.middlewareSaveEditor );
-    this.addMiddleware ( this.middlewareFlagsUpdateIPC );
+    this.addMiddleware ( _.debounce ( () => this.ctx.contextKeys.update (), 50 ) ); //UGLY `this.ctx` won't be defined immediately after calling this method
 
   }
 
@@ -115,68 +115,24 @@ class Main extends Container<MainState, MainCTX> {
 
   }
 
-  async middlewareSaveEditor ( prev: MainState ) {
-
-    const note = this.ctx.note.get ();
-
-    if ( !( prev.note.note && ( ( prev.editor.editing && !this.state.editor.editing ) || ( prev.editor.editing && prev.editor.split !== this.state.editor.split ) || ( this.state.editor.editing && !this.ctx.note.is ( prev.note.note, note ) ) || ( prev.editor.editing && prev.multiEditor.notes.length <= 1 && this.state.multiEditor.notes.length > 1 ) ) ) ) return;
-
-    const data = this.ctx.editor.getData ();
-
-    if ( !data ) return;
-
-    await this.ctx.note.save ( prev.note.note, data.content, data.modified );
-
-  }
-
-  middlewareFlagsUpdateIPCDebounced = _.debounce ( ( app: IMain ) => {
-
-    const flags: StateFlags = {
-      hasNote: !!app.note.get (),
-      isAttachmentsEditing: app.attachments.isEditing (),
-      isEditorEditing: app.editor.isEditing (),
-      isEditorSplitView: app.editor.isSplit (),
-      isMultiEditorEditing: app.multiEditor.isEditing (),
-      isNoteDeleted: app.note.isDeleted (),
-      isNoteFavorited: app.note.isFavorited (),
-      isNotePinned: app.note.isPinned (),
-      isNoteTemplate: !!app.note.getTags ( undefined, TagSpecials.TEMPLATES ).length,
-      isTagsEditing: app.tags.isEditing ()
-    };
-
-    if ( _.isEqual ( app._prevFlags, flags ) ) return; // Nothing changed, no need to update the main process
-
-    app._prevFlags = flags;
-
-    ipc.send ( 'flags-update', flags );
-
-  }, 50 )
-
-  middlewareFlagsUpdateIPC () {
-
-    this.middlewareFlagsUpdateIPCDebounced ( this as any ); //TSC
-
-  }
-
   /* API */
 
-  refresh = async () => {
+  reset = async () => {
 
-    await this.ctx.attachments.refresh ();
-    await this.ctx.notes.refresh ();
-    await this.ctx.tags.refresh ();
+    await this.ctx.theme.update ();
 
-    await this.ctx.tag.update ();
-    await this.ctx.search.update ();
+    await this.ctx.loading.reset ();
+    await this.ctx.editor.reset ();
+    await this.ctx.multiEditor.reset ();
+    await this.ctx.attachments.reset ();
+    await this.ctx.notes.reset ();
+    await this.ctx.tags.reset ();
+    await this.ctx.tag.reset ();
+    await this.ctx.search.reset ();
+    await this.ctx.note.reset ();
+    await this.ctx.quickPanel.reset ();
 
     await this.ctx.loading.set ( false );
-
-  }
-
-  listen = () => {
-
-    this.ctx.attachments.listen ();
-    this.ctx.notes.listen ();
 
   }
 
@@ -205,6 +161,9 @@ class Main extends Container<MainState, MainCTX> {
 export default compose ({
   attachment: Attachment,
   attachments: Attachments,
+  clipboard: Clipboard,
+  cwd: CWD,
+  contextKeys: ContextKeys,
   editor: Editor,
   export: Export,
   import: Import,
@@ -218,6 +177,8 @@ export default compose ({
   sorting: Sorting,
   tag: Tag,
   tags: Tags,
+  theme: Theme,
+  themes: Themes,
   trash: Trash,
   tutorial: Tutorial,
   window: Window

@@ -3,7 +3,7 @@
 
 import * as _ from 'lodash';
 import * as React from 'react';
-import * as is from 'electron-is';
+import {is} from 'electron-util';
 import {connect} from 'overstated';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
 import Main from '@renderer/containers/main';
@@ -68,17 +68,18 @@ import 'monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution.js';
 
 /* MONACO */
 
-class Monaco extends React.Component<{ language: string, theme: string, value: string, editorOptions?: monaco.editor.IEditorOptions, modelOptions?: monaco.editor.ITextModelUpdateOptions, className?: string, editorWillMount?: Function, editorDidMount?: Function, editorWillUnmount?: Function, editorDidUnmount?: Function, onBlur?: Function, onFocus?: Function, onChange?: Function, onUpdate?: Function, onScroll?: Function, container: IMain }, {}> {
+class Monaco extends React.Component<{ filePath: string, language: string, theme: string, value: string, editorOptions?: monaco.editor.IEditorOptions, modelOptions?: monaco.editor.ITextModelUpdateOptions, className?: string, editorWillMount?: Function, editorDidMount?: Function, editorWillUnmount?: Function, editorDidUnmount?: Function, editorWillChange?: Function, onBlur?: Function, onFocus?: Function, onChange?: Function, onUpdate?: Function, onScroll?: Function, container: IMain }, {}> {
 
   /* VARIABLES */
 
-  ref = React.createRef () as any; //TSC
-  editor: MonacoEditor;
+  ref = React.createRef<HTMLDivElement> ();
+  editor?: MonacoEditor;
   _currentValue: string = '';
   _currentChangeDate: Date | undefined = undefined;
-  _onChangeDebounced: Function;
   _preventOnChangeEvent: boolean = false;
-  _zoneTopId: number;
+  _onChangeDebounced?: Function;
+  _zoneTitlebarId?: number;
+  _zonePaddingTopId?: number;
 
   /* LIFECYCLE */
 
@@ -87,7 +88,9 @@ class Monaco extends React.Component<{ language: string, theme: string, value: s
     UMonaco.init ();
 
     if ( this.props.onChange ) {
+
       this._onChangeDebounced = _.debounce ( this.props.onChange as any, 25 ); //TSC
+
     }
 
     this._currentChangeDate = undefined;
@@ -108,63 +111,15 @@ class Monaco extends React.Component<{ language: string, theme: string, value: s
 
     this.editorUpdate ();
 
-    if ( this.props.value !== this._currentValue ) {
+    if ( this.props.value !== this._currentValue ) this.updateValue ( this.props.value );
 
-      this._currentValue = this.props.value;
+    if ( prevProps.language !== this.props.language ) this.updateLanguage ( this.props.language );
 
-      if ( this.editor ) {
+    if ( prevProps.theme !== this.props.theme ) this.updateTheme ( this.props.theme );
 
-        this._preventOnChangeEvent = true;
+    if ( this.props.editorOptions && !_.isEqual ( prevProps.editorOptions, this.props.editorOptions ) ) this.updateEditorOptions ( this.props.editorOptions );
 
-        this.editor.setValue ( this._currentValue );
-
-        if ( this.props.onUpdate ) {
-
-          this.props.onUpdate ( this._currentValue );
-
-        }
-
-        this._preventOnChangeEvent = false;
-
-      }
-
-    }
-
-    if ( prevProps.language !== this.props.language ) {
-
-      const model = this.editor.getModel ();
-
-      if ( model ) {
-
-        monaco.editor.setModelLanguage ( model, this.props.language );
-
-      }
-
-    }
-
-    if ( prevProps.theme !== this.props.theme ) {
-
-      monaco.editor.setTheme ( this.props.theme );
-
-    }
-
-    if ( this.props.editorOptions && !_.isEqual ( prevProps.editorOptions, this.props.editorOptions ) ) {
-
-      this.editor.updateOptions ( this.props.editorOptions );
-
-    }
-
-    if ( this.props.modelOptions && !_.isEqual ( prevProps.modelOptions, this.props.modelOptions ) ) {
-
-      const model = this.editor.getModel ();
-
-      if ( model ) {
-
-        model.updateOptions ( this.props.modelOptions );
-
-      }
-
-    }
+    if ( this.props.modelOptions && !_.isEqual ( prevProps.modelOptions, this.props.modelOptions ) ) this.updateModelOptions ( this.props.modelOptions );
 
   }
 
@@ -176,11 +131,21 @@ class Monaco extends React.Component<{ language: string, theme: string, value: s
 
   }
 
-  shouldComponentUpdate ( nextProps ) {
+  shouldComponentUpdate ( nextProps ) { //TODO: Most of these update* functions should run in `componentDidMount`, but ensuring that the "value" doesn't get reset unnecessarily
 
     this.editorUpdate ();
 
-    return nextProps.value !== this._currentValue;
+    if ( nextProps.filePath !== this.props.filePath ) this.editorWillChange ();
+
+    if ( nextProps.language !== this.props.language ) this.updateLanguage ( nextProps.language );
+
+    if ( nextProps.theme !== this.props.theme ) this.updateTheme ( nextProps.theme );
+
+    if ( nextProps.editorOptions && !_.isEqual ( this.props.editorOptions, nextProps.editorOptions ) ) this.updateEditorOptions ( nextProps.editorOptions );
+
+    if ( nextProps.modelOptions && !_.isEqual ( this.props.modelOptions, nextProps.modelOptions ) ) this.updateModelOptions ( nextProps.modelOptions );
+
+    return nextProps.value !== this.props.value && nextProps.value !== this._currentValue; //FIXME: This check might not be perfect
 
   }
 
@@ -198,11 +163,13 @@ class Monaco extends React.Component<{ language: string, theme: string, value: s
 
   editorDidMount ( editor: MonacoEditor ) {
 
-    const {editorDidMount, editorDidUnmount, onBlur, onFocus, onChange, onScroll} = this.props;
+    const {editorDidMount, editorDidUnmount, onBlur, onFocus, onScroll} = this.props;
 
     editor.onDidChangeModel ( () => {
 
-      delete this._zoneTopId; // Zones are reset when changing the model
+      // Zones are reset when changing the model
+      delete this._zoneTitlebarId;
+      delete this._zonePaddingTopId;
 
       this.editorUpdate ();
 
@@ -245,7 +212,7 @@ class Monaco extends React.Component<{ language: string, theme: string, value: s
       this._currentValue = value;
       this._currentChangeDate = new Date ();
 
-      if ( onChange && !this._preventOnChangeEvent ) {
+      if ( this._onChangeDebounced && !this._preventOnChangeEvent ) {
 
         this._onChangeDebounced ( value, event );
 
@@ -255,44 +222,88 @@ class Monaco extends React.Component<{ language: string, theme: string, value: s
 
   }
 
+  editorWillUnmount = () => {
+
+    if ( this.props.editorWillUnmount ) {
+
+      this.props.editorWillUnmount ();
+
+    }
+
+  }
+
+  editorWillChange = () => {
+
+    if ( this.props.editorWillChange ) {
+
+      this.props.editorWillChange ();
+
+    }
+
+  }
+
   editorUpdate = () => {
 
     if ( !this.editor ) return;
 
     this.editor.layout ();
+
     this.editorUpdateZones ();
 
   }
 
   editorUpdateDebounced = _.debounce ( this.editorUpdate, 25 )
 
-  editorUpdateZones = () => {
+  editorUpdateZone = ( zone: '_zoneTitlebarId' | '_zonePaddingTopId', isActive: boolean, options: Partial<monaco.editor.IViewZone> ) => {
 
-    const needTopZone = is.macOS () && this.props.container.window.isZen () && !this.props.container.window.isFullscreen (); //UGLY
+    if ( !this.editor ) return;
 
-    if ( needTopZone ) {
+    if ( isActive ) {
 
-      if ( this._zoneTopId ) return;
+      if ( this[zone] ) return; // Already active
 
       this.editor.changeViewZones ( accessor => {
-        this._zoneTopId = accessor.addZone ({
+
+        const zoneOptions = Object.assign ({
           domNode: document.createElement ( 'div' ),
-          afterLineNumber: 0,
-          heightInPx: 38,
+          afterLineNumber: -1,
           suppressMouseDown: true
-        });
+        }, options );
+
+        this[zone] = accessor.addZone ( zoneOptions );
+
       });
 
     } else {
 
-      if ( !this._zoneTopId ) return;
+      if ( !this[zone] ) return; // Not active
 
       this.editor.changeViewZones ( accessor => {
-        accessor.removeZone ( this._zoneTopId );
-        delete this._zoneTopId;
+        accessor.removeZone ( this[zone] as number ); //TSC
+        delete this[zone];
       });
 
     }
+
+  }
+
+  editorUpdateZones = () => {
+
+    if ( !this.editor ) return;
+
+    const needsTitlebarZone = is.macos && this.props.container.window.isZen () && !this.props.container.window.isFullscreen ();
+
+    this.editorUpdateZone ( '_zonePaddingTopId', !needsTitlebarZone, {
+      afterLineNumber: 0,
+      heightInPx: 20
+    });
+
+    //TODO: Add a bottom zone as well, it like looks for some reason this is buggy and the zone doesn't get added reliably
+
+    this.editorUpdateZone ( '_zoneTitlebarId', needsTitlebarZone, {
+      afterLineNumber: 0,
+      heightInPx: 38
+    });
 
   }
 
@@ -304,8 +315,9 @@ class Monaco extends React.Component<{ language: string, theme: string, value: s
           dynamicOptions = this.editorWillMount (),
           finalEditorOptions = editorOptions || dynamicOptions ? _.merge ( {}, UMonaco.editorOptions, editorOptions || {}, dynamicOptions || {}, { model: null } ) : UMonaco.editorOptions;
 
-    this.editor = monaco.editor.create ( this.ref.current, finalEditorOptions ) as any; //TSC //UGLY
+    this.editor = monaco.editor.create ( this.ref.current!, finalEditorOptions ) as unknown as MonacoEditor; //TSC //UGLY
 
+    this.editor.getFilePath = () => this.props.filePath; //UGlY
     this.editor.getChangeDate = () => this._currentChangeDate; //UGlY
 
     if ( theme ) {
@@ -334,17 +346,77 @@ class Monaco extends React.Component<{ language: string, theme: string, value: s
 
   destroyMonaco () {
 
-    if ( this.props.editorWillUnmount ) {
-
-      this.props.editorWillUnmount ();
-
-    }
+    this.editorWillUnmount ();
 
     if ( !this.editor ) return;
 
     this.editor.dispose ();
 
     delete this.editor;
+
+  }
+
+  /* UPDATE */
+
+  updateValue ( value: string ) {
+
+    this._currentValue = value;
+
+    if ( !this.editor ) return;
+
+    this._preventOnChangeEvent = true;
+
+    this.editor.setValue ( this._currentValue );
+
+    if ( this.props.onUpdate ) {
+
+      this.props.onUpdate ( this._currentValue );
+
+    }
+
+    this._preventOnChangeEvent = false;
+
+  }
+
+  updateLanguage ( language: string ) {
+
+    if ( !this.editor ) return;
+
+    const model = this.editor.getModel ();
+
+    if ( model ) {
+
+      monaco.editor.setModelLanguage ( model, language );
+
+    }
+
+  }
+
+  updateTheme ( theme: string ) {
+
+    monaco.editor.setTheme ( theme );
+
+  }
+
+  updateEditorOptions ( editorOptions: monaco.editor.IEditorOptions ) {
+
+    if ( !this.editor ) return;
+
+    this.editor.updateOptions ( editorOptions );
+
+  }
+
+  updateModelOptions ( modelOptions: monaco.editor.ITextModelUpdateOptions ) {
+
+    if ( !this.editor ) return;
+
+    const model = this.editor.getModel ();
+
+    if ( model ) {
+
+      model.updateOptions ( modelOptions );
+
+    }
 
   }
 
